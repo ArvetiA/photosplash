@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhotoSplash</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 2em;
+        }
+        #search {
+            width: 100%;
+            max-width: 600px;
+            padding: 10px;
+            margin: 15px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 1em;
+        }
+        .button {
+            padding: 10px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+            font-size: 1em;
+        }
+        #upload {
+            background-color: #007bff;
+        }
+        #upload:hover {
+            background-color: #0056b3;
+        }
+        #clear-storage {
+            background-color: #dc3545;
+        }
+        #clear-storage:hover {
+            background-color: #c82333;
+        }
+        .content {
+            display: flex;
+            gap: 20px;
+        }
+        .categories {
+            width: 25%;
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .categories h2 {
+            margin-top: 0;
+            font-size: 1.5em;
+        }
+        .categories ul {
+            list-style: none;
+            padding: 0;
+        }
+        .categories li {
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .categories li:hover, .categories li.active {
+            background-color: #e7f1ff;
+        }
+        .media {
+            width: 75%;
+        }
+        .media-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .media-item {
+            background-color: white;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 10px;
+            position: relative;
+        }
+        .media-item img, .media-item video {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .media-item .placeholder {
+            width: 100%;
+            height: 200px;
+            background-color: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+            font-size: 1.2em;
+            text-align: center;
+        }
+        .media-item a {
+            display: block;
+            text-align: center;
+            color: #007bff;
+            text-decoration: none;
+            margin: 10px 0;
+        }
+        .media-item a:hover {
+            text-decoration: underline;
+        }
+        .media-item p {
+            margin: 10px 0;
+            color: #555;
+        }
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+        .no-results {
+            color: #555;
+            text-align: center;
+            grid-column: 1 / -1;
+        }
+        #message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+            text-align: center;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .uploading {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PhotoSplash</h1>
+            <input type="text" id="search" placeholder="Search media..." oninput="filterMedia()">
+            <div>
+                <input type="file" id="fileInput" accept="image/*,video/*,application/pdf,.doc,.docx,.txt" style="display: none;">
+                <button id="upload" class="button">Upload Media</button>
+                <button id="clear-storage" class="button">Clear All Uploads</button>
+            </div>
+            <div id="message"></div>
+        </header>
+        <div class="content">
+            <aside class="categories">
+                <h2>Categories</h2>
+                <ul>
+                    <li onclick="selectCategory(null)" class="active">All Media</li>
+                    <li onclick="selectCategory('Nature')">Nature</li>
+                    <li onclick="selectCategory('City')">City</li>
+                    <li onclick="selectCategory('People')">People</li>
+                    <li onclick="selectCategory('Abstract')">Abstract</li>
+                    <li onclick="selectCategory('Uploaded')">Uploaded</li>
+                </ul>
+            </aside>
+            <main class="media">
+                <div class="media-grid" id="media-grid"></div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // PhotoSplash: Unsplash-inspired website for browsing and uploading media
+        // To host on GitHub Pages:
+        // 1. Create a GitHub account at github.com
+        // 2. Create a public repository (e.g., 'photosplash')
+        // 3. Upload this file (photosplash.html) to the repository
+        // 4. Go to Settings > Pages, set Source to 'main' branch, root folder
+        // 5. Access at https://<your-username>.github.io/photosplash/photosplash.html
+
+        // Initial media (Unsplash images)
+        const initialMedia = [
+            { id: 1, title: "Mountain Lake", description: "Serene lake with mountains", category: "Nature", type: "image", src: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e" },
+            { id: 2, title: "Forest Path", description: "Lush green forest trail", category: "Nature", type: "image", src: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e" },
+            { id: 3, title: "City Skyline", description: "Modern city at dusk", category: "City", type: "image", src: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df" },
+            { id: 4, title: "Urban Street", description: "Busy city street", category: "City", type: "image", src: "https://images.unsplash.com/photo-1519501025264-65ba15ac498a" },
+            { id: 5, title: "Portrait", description: "Person in natural light", category: "People", type: "image", src: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea" },
+            { id: 6, title: "Group Laughing", description: "Friends enjoying time", category: "People", type: "image", src: "https://images.unsplash.com/photo-1524504388940-7d2007558f8e" },
+            { id: 7, title: "Color Waves", description: "Abstract color patterns", category: "Abstract", type: "image", src: "https://images.unsplash.com/photo-1567095761054-7a02e69e5c43" },
+            { id: 8, title: "Light Streaks", description: "Dynamic light abstract", category: "Abstract", type: "image", src: "https://images.unsplash.com/photo-1557672172-298e090bd0f1" }
+        ];
+
+        // Load media from localStorage or use initial media
+        let media = JSON.parse(localStorage.getItem('media')) || initialMedia;
+        let selectedCategory = null;
+
+        // Save media to localStorage
+        function saveMedia() {
+            try {
+                localStorage.setItem('media', JSON.stringify(media));
+            } catch (e) {
+                showMessage('Error: Storage quota exceeded. Clear uploads and try again.', 'error');
+            }
+        }
+
+        // Show message (success/error/uploading)
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = type;
+            messageDiv.style.display = 'block';
+            if (type !== 'uploading') {
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        // Render media items
+        function renderMedia(filteredMedia) {
+            const mediaGrid = document.getElementById('media-grid');
+            mediaGrid.innerHTML = '';
+            if (filteredMedia.length === 0) {
+                mediaGrid.innerHTML = '<p class="no-results">No media found.</p>';
+                return;
+            }
+            filteredMedia.forEach(item => {
+                const mediaDiv = document.createElement('div');
+                mediaDiv.className = 'media-item';
+                let content = '';
+                if (item.type === 'image') {
+                    content = `<img src="${item.src}" alt="${item.title}">`;
+                } else if (item.type === 'video') {
+                    content = `<video controls src="${item.src}" alt="${item.title}"></video>`;
+                } else if (item.type === 'pdf' || item.type === 'document') {
+                    content = `<div class="placeholder">${item.type.toUpperCase()}</div><a href="${item.src}" download="${item.title}.${item.type === 'pdf' ? 'pdf' : 'docx'}">Download ${item.title}</a>`;
+                }
+                mediaDiv.innerHTML = `
+                    ${content}
+                    <p>${item.title} - ${item.category}</p>
+                `;
+                if (item.category === 'Uploaded') {
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-btn';
+                    deleteBtn.textContent = 'Delete';
+                    deleteBtn.onclick = () => deleteMedia(item.id);
+                    mediaDiv.appendChild(deleteBtn);
+                }
+                mediaGrid.appendChild(mediaDiv);
+            });
+        }
+
+        // Filter media based on search and category
+        function filterMedia() {
+            const searchTerm = document.getElementById('search').value.toLowerCase();
+            const filteredMedia = media.filter(item => 
+                (selectedCategory === null || item.category === selectedCategory) &&
+                (item.title.toLowerCase().includes(searchTerm) || 
+                 item.description.toLowerCase().includes(searchTerm))
+            );
+            renderMedia(filteredMedia);
+        }
+
+        // Select category
+        function selectCategory(category) {
+            selectedCategory = category;
+            document.querySelectorAll('.categories li').forEach(li => {
+                li.classList.remove('active');
+                if (li.textContent === (category || 'All Media')) {
+                    li.classList.add('active');
+                }
+            });
+            filterMedia();
+        }
+
+        // Delete media item
+        function deleteMedia(id) {
+            media = media.filter(item => item.id !== id);
+            saveMedia();
+            filterMedia();
+            showMessage('Media deleted successfully.', 'success');
+        }
+
+        // Clear all uploads
+        document.getElementById('clear-storage').addEventListener('click', () => {
+            media = initialMedia;
+            saveMedia();
+            filterMedia();
+            showMessage('All uploads cleared.', 'success');
+        });
+
+        // Handle file upload
+        document.getElementById('upload').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Check file size (1MB limit)
+            if (file.size > 1024 * 1024) {
+                showMessage('File size exceeds 1MB limit.', 'error');
+                return;
+            }
+
+            showMessage('Uploading...', 'uploading');
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const base64Data = e.target.result;
+                let type, category = 'Uploaded';
+                if (file.type.startsWith('image/')) {
+                    type = 'image';
+                } else if (file.type.startsWith('video/')) {
+                    type = 'video';
+                } else if (file.type === 'application/pdf') {
+                    type = 'pdf';
+                } else if (file.type.includes('msword') || file.type.includes('officedocument') || file.type === 'text/plain') {
+                    type = 'document';
+                } else {
+                    showMessage('Unsupported file type!', 'error');
+                    return;
+                }
+
+                const newMedia = {
+                    id: media.length + 1,
+                    title: file.name.split('.')[0],
+                    description: `Uploaded ${type}`,
+                    category: category,
+                    type: type,
+                    src: base64Data
+                };
+
+                media.push(newMedia);
+                saveMedia();
+                filterMedia();
+                showMessage(`Uploaded ${file.name} successfully.`, 'success');
+            };
+            reader.readAsDataURL(file);
+            event.target.value = ''; // Reset input
+        });
+
+        // Initial render
+        renderMedia(media);
+    </script>
+</body>
+</html>
