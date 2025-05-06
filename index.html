@@ -174,7 +174,7 @@
     <div class="container">
         <header>
             <h1>PhotoSplash</h1>
-            <input type="text" id="search" placeholder="Search media..." oninput="filterMedia()">
+            <input type="text" id="search" placeholder="Search media..." oninput="searchMedia()">
             <div>
                 <input type="file" id="fileInput" accept="image/*,video/*,application/pdf,.doc,.docx,.txt" style="display: none;">
                 <button id="upload" class="button">Upload Media</button>
@@ -201,10 +201,7 @@
     </div>
 
     <script>
-        // PhotoSplash: Unsplash-inspired website for browsing and uploading media
-        // Hosted on GitHub Pages at https://arvetia.github.io/photosplash/
-
-        // Initial media (Unsplash images)
+        // Initial media (Unsplash images) - used as fallback if API fails
         const initialMedia = [
             { id: 1, title: "Mountain Lake", description: "Serene lake with mountains", category: "Nature", type: "image", src: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e" },
             { id: 2, title: "Forest Path", description: "Lush green forest trail", category: "Nature", type: "image", src: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e" },
@@ -219,6 +216,12 @@
         // Load media from localStorage or use initial media
         let media = JSON.parse(localStorage.getItem('media')) || initialMedia;
         let selectedCategory = null;
+        let searchResults = [];
+
+        // Configuration for hybrid search service API
+        const API_URL = "http://<your-server>:3000"; // Replace with your hybrid search service URL
+        const SEARCH_ENDPOINT = "/search";
+        const JWT_TOKEN = "Bearer <your-jwt-token>"; // Replace with your JWT token
 
         // Save media to localStorage
         function saveMedia() {
@@ -243,14 +246,14 @@
         }
 
         // Render media items
-        function renderMedia(filteredMedia) {
+        function renderMedia(items) {
             const mediaGrid = document.getElementById('media-grid');
             mediaGrid.innerHTML = '';
-            if (filteredMedia.length === 0) {
+            if (items.length === 0) {
                 mediaGrid.innerHTML = '<p class="no-results">No media found.</p>';
                 return;
             }
-            filteredMedia.forEach(item => {
+            items.forEach(item => {
                 const mediaDiv = document.createElement('div');
                 mediaDiv.className = 'media-item';
                 let content = '';
@@ -276,15 +279,51 @@
             });
         }
 
-        // Filter media based on search and category
-        function filterMedia() {
-            const searchTerm = document.getElementById('search').value.toLowerCase();
-            const filteredMedia = media.filter(item => 
-                (selectedCategory === null || item.category === selectedCategory) &&
-                (item.title.toLowerCase().includes(searchTerm) || 
-                 item.description.toLowerCase().includes(searchTerm))
-            );
-            renderMedia(filteredMedia);
+        // Search using the hybrid search service API
+        async function searchMedia() {
+            const searchTerm = document.getElementById('search').value.trim();
+            if (searchTerm === '') {
+                // If search is empty, show all media based on category
+                const filteredMedia = selectedCategory === null ? media : media.filter(item => item.category === selectedCategory);
+                renderMedia(filteredMedia);
+                return;
+            }
+
+            try {
+                showMessage('Searching...', 'uploading');
+                const response = await fetch(`${API_URL}${SEARCH_ENDPOINT}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': JWT_TOKEN
+                    },
+                    body: JSON.stringify({ query: searchTerm })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.statusText}`);
+                }
+
+                const results = await response.json();
+                searchResults = results.map(result => ({
+                    id: result.id,
+                    title: result.title,
+                    description: result.description,
+                    category: result.category,
+                    type: result.type,
+                    src: result.src
+                }));
+
+                // Filter results by selected category
+                const filteredResults = selectedCategory === null ? searchResults : searchResults.filter(item => item.category === selectedCategory);
+                renderMedia(filteredResults);
+                showMessage('Search completed.', 'success');
+            } catch (error) {
+                console.error('Search error:', error);
+                showMessage('Error searching media. Showing local media instead.', 'error');
+                const filteredMedia = selectedCategory === null ? media : media.filter(item => item.category === selectedCategory);
+                renderMedia(filteredMedia);
+            }
         }
 
         // Select category
@@ -296,14 +335,29 @@
                     li.classList.add('active');
                 }
             });
-            filterMedia();
+
+            // If there's a search term, filter search results; otherwise, filter local media
+            const searchTerm = document.getElementById('search').value.trim();
+            if (searchTerm !== '') {
+                const filteredResults = selectedCategory === null ? searchResults : searchResults.filter(item => item.category === selectedCategory);
+                renderMedia(filteredResults);
+            } else {
+                const filteredMedia = selectedCategory === null ? media : media.filter(item => item.category === selectedCategory);
+                renderMedia(filteredMedia);
+            }
         }
 
         // Delete media item
         function deleteMedia(id) {
             media = media.filter(item => item.id !== id);
             saveMedia();
-            filterMedia();
+            const searchTerm = document.getElementById('search').value.trim();
+            if (searchTerm !== '') {
+                searchMedia();
+            } else {
+                const filteredMedia = selectedCategory === null ? media : media.filter(item => item.category === selectedCategory);
+                renderMedia(filteredMedia);
+            }
             showMessage('Media deleted successfully.', 'success');
         }
 
@@ -311,7 +365,14 @@
         document.getElementById('clear-storage').addEventListener('click', () => {
             media = initialMedia;
             saveMedia();
-            filterMedia();
+            searchResults = [];
+            document.getElementById('search').value = '';
+            selectedCategory = null;
+            document.querySelectorAll('.categories li').forEach(li => {
+                li.classList.remove('active');
+                if (li.textContent === 'All Media') li.classList.add('active');
+            });
+            renderMedia(media);
             showMessage('All uploads cleared.', 'success');
         });
 
@@ -359,7 +420,13 @@
 
                 media.push(newMedia);
                 saveMedia();
-                filterMedia();
+                const searchTerm = document.getElementById('search').value.trim();
+                if (searchTerm !== '') {
+                    searchMedia();
+                } else {
+                    const filteredMedia = selectedCategory === null ? media : media.filter(item => item.category === selectedCategory);
+                    renderMedia(filteredMedia);
+                }
                 showMessage(`Uploaded ${file.name} successfully.`, 'success');
             };
             reader.readAsDataURL(file);
